@@ -1,0 +1,181 @@
+from io import BytesIO
+import os
+import tokenize
+import PyPDF2
+import openai
+import nltk
+from flask import Flask, request
+from flask_cors import CORS
+from PyPDF2 import PdfReader
+import docxpy
+from dotenv import load_dotenv, find_dotenv
+_ = load_dotenv(find_dotenv())
+
+app = Flask(__name__)
+CORS(app)
+
+nltk.download('punkt')
+
+def count_tokens(prompt):
+    prompt_bytes = bytes(prompt, 'utf-8')
+
+    token_count = 0
+    for token in tokenize.tokenize(BytesIO(prompt_bytes).readline):
+        if token.type != tokenize.ENDMARKER:
+            token_count += 1
+
+    return token_count
+
+def split_prompt(text, max_tokens=1500):
+    sentences = nltk.sent_tokenize(text)
+
+    chunks = []
+    current_chunk = []
+    current_length = 0
+    for sentence in sentences:
+        sentence_length = len(sentence.split())
+        if current_length + sentence_length <= max_tokens:
+            current_chunk.append(sentence)
+            current_length += sentence_length
+        else:
+            chunks.append(current_chunk)
+            current_chunk = [sentence]
+            current_length = sentence_length
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    prompts = []
+    for chunk in chunks:
+        prompt = ' '.join(chunk)
+        prompts.append(prompt)
+
+    return prompts
+
+
+def extract_paragraphs(text):
+    paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+
+    return ' '.join(paragraphs)
+
+@app.route('/convert', methods=['POST'])
+def process_pdf():
+    file = request.files['pdf']
+    file_name = request.form['file_name']
+    if file_name.endswith(".pdf"):
+        current_page = int(request.form['current_page'])
+
+        pdf_reader = PdfReader(file)
+        num_pages = len(pdf_reader.pages)  # Get the total number of pages
+
+        # Initialize an empty string to store the combined text of all pages
+        combined_text = ""
+        
+        # Iterate over each page and concatenate the text
+        for page in pdf_reader.pages:
+            combined_text += page.extract_text() + " "
+
+        openai.api_key = os.environ.get('OPENAI_API_KEY')
+        client = openai.OpenAI()
+        final_prompt = """you are a resume parser, \
+             you should extract the technical skills\
+                 ,name ,email address and phone number\
+            from the provided text. technical skills is names\
+             of programming languages and technologies mentioned\
+            in this text. hint: name and email address is similar.\
+                 let the output must only contain name(if available),\
+                     email(if available), phone number(if available)\
+                         and technical skills(if available)\
+                            .it should be in a list format"""  
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{'role': 'system', 'content': final_prompt},
+                          {'role': 'user', 'content': combined_text}],
+                temperature=1,
+                max_tokens=(4000 - count_tokens(final_prompt)),
+                frequency_penalty=0,
+                presence_penalty=0
+            )
+            final_response = response.choices[0].message.content
+        except Exception as e:
+            print("OpenAI API error:", str(e))
+            return {
+                'success': False,
+                'error': 'OpenAI API error',
+                'message': str(e),
+            }
+
+        if len(final_response) > 0:
+            return {
+                'success': True,
+                'message': "Success",
+                'output': final_response,
+                "current_page": current_page,
+                "total_pages": num_pages,
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'No responses were received from the OpenAI API',
+                'message': "Please try again!",
+            }
+ 
+    elif(file_name.rsplit(".")[-1]=="docx" or file_name.rsplit(".")[-1]=="doc"):
+        current_page = int(request.form['current_page'])
+        # page_text= TextIOWrapper(request.files['pdf'], encoding=request.encoding)      
+        file.save('uploaded_file.docx')
+        page_text = docxpy.process('uploaded_file.docx')
+        print(page_text)
+        openai.api_key = os.environ.get('OPENAI_API_KEY')
+        client=openai.OpenAI()
+        # final_prompt = """From this text extract the name,contact details and skills of a software engineer like names of programming languages and technologies which you can name as technical skills , the output should only be "technical skills" in dictionary format. note: do not include any skills that is not given in the text """
+        final_prompt = """you are a resume parser, \
+             you should extract the technical skills\
+                 ,name ,email address and phone number\
+            from the provided text. technical skills is names\
+             of programming languages and technologies mentioned\
+            in this text. hint: name and email address is similar.\
+                 let the output must only contain name(if available),\
+                     email(if available), phone number(if available)\
+                         and technical skills(if available)\
+                            .it should be in a list format"""
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages= [{ 'role': 'system', 'content': f"{final_prompt}"},
+                    {"role":"user", "content": f"{page_text}"}],                
+                temperature=1,
+                max_tokens=(4000 - count_tokens(final_prompt)),
+                frequency_penalty=0,
+                presence_penalty=0
+                )
+            final_response = response.choices[0].message.content
+        except Exception as e:
+            print("OpenAI API error:", str(e))
+            return {
+                'success': False,
+                'error': 'OpenAI API error',
+                'message': str(e),
+                }
+
+        if len(final_response) > 0:
+            return {
+                'success': True,
+                'message': "Success",
+                'output': final_response,
+                "current_page": current_page,
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'No responses were received from the OpenAI API',
+                'message': "Please try again!",
+            }
+    else:
+        return {
+            'error':'invalid file'
+        }
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
