@@ -13,9 +13,8 @@ To run this application on your local machine, follow these steps:
 ## Usage
 
 1. Choose a PDF file to upload.
-2. Enter a city and country (optional).
-3. Click the "Submit" button.
-4. View the converted text in the right-hand pane. If the text is long, you may need to use the pagination controls to view all of it.
+2. Click the "Submit" button.
+3. View the converted text in the right-hand pane. If the text is long, you may need to use the pagination controls to view all of it.
 
 ## Technologies Used
 
@@ -24,14 +23,23 @@ To run this application on your local machine, follow these steps:
 - JavaScript
 
 ## Backend
-You can find the Backend code for this project at the following link:
-[https://github.com/sumitra19jha/PDF-Converter-Backend-GPT3.5](https://github.com/sumitra19jha/PDF-Converter-Backend-GPT3.5)
 
+Clone this repository to your local machine.
+
+Install the required packages using pip:
+
+pip install -r requirements.txt
+
+Set your OpenAI API key as an environment variable:
+
+ OPENAI_API_KEY=your-api-key-here
+ 
 Make sure to follow the instructions in the frontend README.md file to set up and run the apis.
 
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more information.
-
 ## Images
-![Screenshot 2023-03-31 at 5 54 25 PM](https://user-images.githubusercontent.com/35868598/229119267-c8a920ed-2374-4a69-95a5-dd8cea7c5e1a.png)
+For pdf file
+![image](https://github.com/jpreethi1522/AIResume_Parser/assets/120386192/6897d3c4-c3cd-413a-a8d4-a886b83d4907)
+
+For doc or docx file
+![image](https://github.com/jpreethi1522/AIResume_Parser/assets/120386192/40a94741-5db6-4845-8655-e49c4b0cf1c1)
+
